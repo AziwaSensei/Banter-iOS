@@ -41,7 +41,7 @@ Why the difference? Because the two platforms hand you different things, and I l
 
 **The advantages are real.** The first token arrives before your thumb leaves the screen. Nothing in the question leaves the device, so privacy is structural rather than promised. A chatty user costs you nothing more than a quiet one. And it works on the bus, in the basement, and in the village where the signal is one bar on a good day.
 
-**So are the costs.** The models are small, around three billion parameters for Apple's and for Gemma 4 E2B. They summarise well and fall apart when asked to reason over long tables. Apple's context window is 4,096 tokens, fixed, and everything counts against it. Device coverage is narrow: Apple Intelligence phones on one side, Google's Gemini Nano list on the other, or a 2.6 GB download if you bring your own model. And generation is the most expensive thing the phone does while your app is open. The Android characters only talk while the screen is visible, because the first version warmed my hand.
+**So are the costs.** The models are small, around three billion parameters for Apple's and for Gemma 4 E2B. They summarise well and fall apart when asked to reason over long tables. Apple's context window is fixed and small, 4,096 tokens on iOS 26 and 8,192 on the iOS 27 simulator I tested on, and everything counts against it. Device coverage is narrow: Apple Intelligence phones on one side, Google's Gemini Nano list on the other, or a 2.6 GB download if you bring your own model. And generation is the most expensive thing the phone does while your app is open. The Android characters only talk while the screen is visible, because the first version warmed my hand.
 
 **The grey areas are where the thinking happens.**
 
@@ -61,7 +61,7 @@ Why the difference? Because the two platforms hand you different things, and I l
 | **API** | `LanguageModelSession` | ML Kit GenAI Prompt API (beta) for Gemini Nano; LiteRT-LM for your own model |
 | **Agent framework** | Built in: tools, structured output, a readable transcript | Not built in. Koog gives you agents; you wire it to the device yourself |
 | **Tool calling** | First class: a `Tool` struct with `@Generable` arguments, the framework runs the loop | Engine-dependent; the Prompt API does not expose it the same way |
-| **Context window** | 4,096 tokens, fixed | Prompt API about 4,000 input tokens; your own model, bounded by memory |
+| **Context window** | Fixed: 4,096 tokens on iOS 26, 8,192 reported on iOS 27 | Prompt API about 4,000 input tokens; your own model, bounded by memory |
 | **Who can run it** | Apple Intelligence devices, iOS 26 and later | Gemini Nano: a device list; your own model: anything with the RAM |
 
 **On iOS**, Apple gave me an agent in a box. The session holds the transcript; I give it instructions and tools; when the model needs the standings, the framework calls my tool and feeds the result back.
@@ -115,7 +115,7 @@ Each character is then an ordinary `AIAgent` with its own system prompt and a si
 
 ### The error that kept finding me
 
-`exceededContextWindowSize`. Apple's engineers have said on the forums that the 4,096-token window is fixed. Everything in a session counts: instructions, every prompt, every reply, every tool schema, and the input and output of every tool call.
+`exceededContextWindowSize`. Apple's engineers said on the forums that the window is 4,096 tokens and fixed. On the iOS 27 simulator the error itself told me the ceiling was 8,192, so it has grown, but it is still a wall. Everything in a session counts: instructions, every prompt, every reply, every tool schema, and the input and output of every tool call.
 
 Now picture a standings table. Twenty teams, each with a rank, a name, a record, points, games played. My first tool returned something close to the raw structure. One call ate half the window; the third question threw. The error even reports a count slightly over the limit, which confused me until I understood it reports the count at the moment it tripped.
 
@@ -132,20 +132,33 @@ if let points = row.points { line += ", \(points) pts" }
 
 **Keep the guardrail out of the main session.** The classifier runs in its own short-lived session and never adds to the conversation's transcript.
 
-**Catch the error and rebuild the session.** A long enough chat will still fill the window. Apple's technote on managing the context window says to condense and continue; what you keep is your call. I keep only the instructions. The tools can fetch any fact again more cheaply than the transcript can carry it.
+**Catch the error and rebuild the session.** A long enough chat will still fill the window, and here is the part the documentation did not prepare me for: once it does, the session never recovers. I asked for the full table eleven times in a row on the iOS 27 simulator. The eleventh overflowed, and the twelfth and thirteenth failed with the same error before the model had read a word. The session is finished until you make a new one.
+
+Apple's technote on managing the context window says to condense and continue; what you keep is your call. I keep only the instructions. The tools can fetch any fact again more cheaply than the transcript can carry it.
 
 ```swift
 func respond(to message: String) async throws -> Reply {
     do {
         return try await send(message)
-    } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
+    } catch where Self.isContextOverflow(error) {
         session = Self.makeSession(league: league, store: store, transcript: condensedTranscript())
         return try await send(message)
     }
 }
+
+private static func isContextOverflow(_ error: any Error) -> Bool {
+    if #available(iOS 27, *), case LanguageModelError.contextSizeExceeded = error { return true }
+    if case LanguageModelSession.GenerationError.exceededContextWindowSize = error { return true }
+    if let toolError = error as? LanguageModelSession.ToolCallError {
+        return isContextOverflow(toolError.underlyingError)
+    }
+    return false
+}
 ```
 
-With the first three fixes in place, eight questions in a row, three of them full tables, stayed inside the window on an iPhone simulator. The fourth fix is for the day the user keeps going. The user loses the earlier turns, not the answer.
+Why two names? Because my first version caught only `GenerationError.exceededContextWindowSize`, the case in every tutorial, and the simulator walked straight past it. iOS 27 deprecates that case and throws `LanguageModelError.contextSizeExceeded` instead, which at least carries the window size and the token count that tripped it. A catch written from the documentation matched nothing, the user saw an error bubble, and the chat was dead. Check which error your SDK actually throws before you trust the catch. And do not hard-code the number either: `SystemLanguageModel.default.contextSize` will tell you the window on the device you are actually running on.
+
+With the first three fixes, eight ordinary questions, three of them full tables, never came near the limit. The fourth fix is for the user who keeps going. With it in place I ran the eleven-table test again: the eleventh question overflowed, the agent rebuilt the session from a transcript of forty-one entries, and the eleventh, twelfth and thirteenth were all answered. The user loses the earlier turns, not the answer.
 
 On Android the problem is the same with a different number. The Banter characters see only the last two messages of the chat. It sounds brutal. It is also why three of them can take turns on a phone without it crawling.
 

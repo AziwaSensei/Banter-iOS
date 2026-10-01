@@ -97,12 +97,15 @@ asks for a `@Generable` struct with one `Bool`. The answer is typed, so the chec
 the model to format a table, the view model checks which tool ran and shows the same rows the
 tool saw. Small models are bad at tables and good at summaries, so each does its part.
 
-**A fixed context window, handled in one place.** The on-device model has a 4,096-token window
-shared by the instructions, every prompt, every reply and every tool result. Long chats trip
-`exceededContextWindowSize`. `ChatAgent` catches it, rebuilds the session from a condensed
-transcript (just the instructions) and resends the message once. The tools keep their output
-compact and the instructions ask for summaries so this happens rarely, but when it does the
-user loses the earlier turns rather than the answer.
+**A fixed context window, handled in one place.** The on-device model has a fixed window (4,096
+tokens on iOS 26, 8,192 reported on the iOS 27 simulator) shared by the instructions, every
+prompt, every reply and every tool result. A long chat overflows it, and once it has, every later
+turn fails too. `ChatAgent` catches the overflow, rebuilds the session from a condensed transcript
+(just the instructions) and resends the message once. Note the error was renamed in iOS 27:
+`GenerationError.exceededContextWindowSize` is deprecated and `LanguageModelError.contextSizeExceeded`
+is thrown instead, so the agent checks both. The tools keep their output compact and the
+instructions ask for summaries, so this happens rarely; when it does the user loses the earlier
+turns rather than the answer.
 
 **Explicit isolation.** The project defaults to `nonisolated`. Types that touch the UI or hold
 shared mutable state opt in with `@MainActor`: `ChatViewModel`, `ChatAgent`, `LeagueStore`,

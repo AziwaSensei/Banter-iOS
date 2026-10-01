@@ -48,18 +48,34 @@ final class ChatAgent {
 
     /// Sends `message` to the model and returns its reply.
     ///
-    /// The on-device model has a fixed 4,096-token window shared by the instructions, every
-    /// prompt, every reply and every tool result. A long chat, or one big standings table, will
-    /// eventually trip `exceededContextWindowSize`. When it does, the session is rebuilt from a
-    /// condensed transcript (the instructions plus the message that just failed) and the
-    /// message is sent once more. The user loses the earlier turns, not the answer.
+    /// The on-device model has a fixed context window (4,096 tokens on iOS 26, 8,192 on the
+    /// iOS 27 simulator) shared by the instructions, every prompt, every reply and every tool
+    /// result. A long chat of standings tables will eventually exceed it, and once it does the
+    /// session never recovers on its own. So the overflow is caught, the session is rebuilt from
+    /// a condensed transcript (just the instructions) and the message is sent once more. The
+    /// user loses the earlier turns, not the answer.
     func respond(to message: String) async throws -> Reply {
         do {
             return try await send(message)
-        } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
+        } catch where Self.isContextOverflow(error) {
             session = Self.makeSession(league: league, store: store, transcript: condensedTranscript())
             return try await send(message)
         }
+    }
+
+    /// iOS 27 renamed the error: `GenerationError.exceededContextWindowSize` is deprecated and
+    /// the session now throws `LanguageModelError.contextSizeExceeded`, which also carries the
+    /// window size and the token count that tripped it. A catch written against the old name
+    /// lets the new error straight through, and every turn after it fails the same way. Both
+    /// are checked here, and either may arrive wrapped in a `ToolCallError` when it is a
+    /// tool's output that pushes the transcript over.
+    private static func isContextOverflow(_ error: any Error) -> Bool {
+        if #available(iOS 27, *), case LanguageModelError.contextSizeExceeded = error { return true }
+        if case LanguageModelSession.GenerationError.exceededContextWindowSize = error { return true }
+        if let toolError = error as? LanguageModelSession.ToolCallError {
+            return isContextOverflow(toolError.underlyingError)
+        }
+        return false
     }
 
     /// Keeps only the instructions. Everything the model said before is dropped; the tools
