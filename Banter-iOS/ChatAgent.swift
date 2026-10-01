@@ -15,7 +15,8 @@ import FoundationModels
 @MainActor
 final class ChatAgent {
     let league: League
-    private let session: LanguageModelSession
+    private let store: LeagueStore
+    private var session: LanguageModelSession
 
     /// What the model wrote, plus which tools it called on the way.
     struct Reply {
@@ -25,18 +26,53 @@ final class ChatAgent {
 
     init(league: League, store: LeagueStore) {
         self.league = league
-        session = LanguageModelSession(
-            tools: [
-                SportsScheduleTool(league: league, store: store),
-                SportsStandingsTool(league: league, store: store),
-                DateTool(),
-            ],
-            instructions: Self.instructions(for: league)
-        )
+        self.store = store
+        session = Self.makeSession(league: league, store: store)
+    }
+
+    private static func makeSession(
+        league: League,
+        store: LeagueStore,
+        transcript: Transcript? = nil
+    ) -> LanguageModelSession {
+        let tools: [any Tool] = [
+            SportsScheduleTool(league: league, store: store),
+            SportsStandingsTool(league: league, store: store),
+            DateTool(),
+        ]
+        if let transcript {
+            return LanguageModelSession(tools: tools, transcript: transcript)
+        }
+        return LanguageModelSession(tools: tools, instructions: instructions(for: league))
     }
 
     /// Sends `message` to the model and returns its reply.
+    ///
+    /// The on-device model has a fixed 4,096-token window shared by the instructions, every
+    /// prompt, every reply and every tool result. A long chat, or one big standings table, will
+    /// eventually trip `exceededContextWindowSize`. When it does, the session is rebuilt from a
+    /// condensed transcript (the instructions plus the message that just failed) and the
+    /// message is sent once more. The user loses the earlier turns, not the answer.
     func respond(to message: String) async throws -> Reply {
+        do {
+            return try await send(message)
+        } catch LanguageModelSession.GenerationError.exceededContextWindowSize {
+            session = Self.makeSession(league: league, store: store, transcript: condensedTranscript())
+            return try await send(message)
+        }
+    }
+
+    /// Keeps only the instructions. Everything the model said before is dropped; the tools
+    /// can fetch the facts again, and that is cheaper than carrying old tables around.
+    private func condensedTranscript() -> Transcript {
+        let kept = session.transcript.prefix { entry in
+            if case .instructions = entry { return true }
+            return false
+        }
+        return Transcript(entries: Array(kept))
+    }
+
+    private func send(_ message: String) async throws -> Reply {
         let alreadySeen = session.transcript.count
         let response = try await session.respond(to: message)
 

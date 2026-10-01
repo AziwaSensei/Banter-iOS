@@ -7,6 +7,15 @@ endpoints and kept in a local SwiftData database so most questions never touch t
 
 Requires iOS 27 and a device with Apple Intelligence.
 
+## Screenshots
+
+| Pick a league | Empty chat | Standings reply | Schedule reply |
+|---|---|---|---|
+| ![League picker](docs/screenshots/01-league-picker.png) | ![Empty chat with suggested questions](docs/screenshots/02-empty-chat.png) | ![Premier League standings table under the reply](docs/screenshots/03-standings-table.png) | ![NFL schedule table under the reply](docs/screenshots/04-schedule-table.png) |
+
+Taken on an iPhone 18 Pro simulator running iOS 27. The replies and tables are real: the
+on-device model called the standings and schedule tools against live ESPN data.
+
 ## The shape of it
 
 ```
@@ -88,6 +97,13 @@ asks for a `@Generable` struct with one `Bool`. The answer is typed, so the chec
 the model to format a table, the view model checks which tool ran and shows the same rows the
 tool saw. Small models are bad at tables and good at summaries, so each does its part.
 
+**A fixed context window, handled in one place.** The on-device model has a 4,096-token window
+shared by the instructions, every prompt, every reply and every tool result. Long chats trip
+`exceededContextWindowSize`. `ChatAgent` catches it, rebuilds the session from a condensed
+transcript (just the instructions) and resends the message once. The tools keep their output
+compact and the instructions ask for summaries so this happens rarely, but when it does the
+user loses the earlier turns rather than the answer.
+
 **Explicit isolation.** The project defaults to `nonisolated`. Types that touch the UI or hold
 shared mutable state opt in with `@MainActor`: `ChatViewModel`, `ChatAgent`, `LeagueStore`,
 `NetworkMonitor`. Models, tools and the API layer are plain and can run anywhere, which
@@ -109,4 +125,5 @@ They are unofficial and can change without notice.
 ## Running
 
 Open `Banter-iOS.xcodeproj`, pick a device with Apple Intelligence, run. On a simulator the
-UI, league picker and data sync work; the model itself does not respond.
+UI, league picker and data sync always work. The model responds too, as long as the Mac
+running the simulator has Apple Intelligence enabled; otherwise the chat shows an error bubble.
