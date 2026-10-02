@@ -1,12 +1,12 @@
 # The Friend Who Knew Every Score
 
-## Building agents that live on the phone, on iOS and Android
+*Building agents that live on the phone, on iOS and Android*
 
 *Part of the AI in Mobile series. Companion code: [Banter for iOS](https://github.com/AziwaSensei/Banter-iOS) and [Banter for Android](https://github.com/AziwaSensei/OfflineBanterChat).*
 
 ---
 
-### How this started
+## How this started
 
 My friend Paul knows sports. Not the way a man who reads the headlines knows sports; the way a man knows his own compound. Mention any team and he tells you who they played last weekend, who scored, who limped off in the second half, and what the manager said afterwards. He looks nothing up.
 
@@ -18,26 +18,33 @@ That is how Banter came about. I built it twice, once for iOS and once for Andro
 
 ---
 
-### Two apps, one name
+## Two apps, one name
 
 **On iOS**, Banter is a sports agent. You pick a league and ask about this week's fixtures, the table, or how your team is doing. Apple's on-device model answers, but it does not guess at scores. It calls tools that read a local database, which is filled from ESPN's public endpoints when there is a network and left alone when there is not. The reply is a short paragraph; the app draws the full table under it.
 
-![iOS: pick a league](../screenshots/01-league-picker.png)
-![iOS: the empty chat with suggested questions](../screenshots/02-empty-chat.png)
-![iOS: the Premier League table under the model's reply](../screenshots/03-standings-table.png)
-![iOS: this week's NFL schedule under the reply](../screenshots/04-schedule-table.png)
+![iOS: pick a league](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/01-league-picker.png)
+*iOS: pick a league*
+![iOS: the empty chat with suggested questions](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/02-empty-chat.png)
+*iOS: the empty chat with suggested questions*
+![iOS: the Premier League table under the model's reply](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/03-standings-table.png)
+*iOS: the Premier League table under the model's reply*
+![iOS: this week's NFL schedule under the reply](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/04-schedule-table.png)
+*iOS: this week's NFL schedule under the reply*
 
 **On Android**, Banter became a group chat. Every member is a fictional character with a trade, a way of talking and a secret only they know: Musa the barber, Grace the teacher who corrects everyone's English, Pastor Ben who takes football too seriously. Each is an agent built with JetBrains' Koog framework, running on a Gemma model stored in the phone. You say something; one of them answers; if you go quiet, they carry on among themselves.
 
-![Android: pick a group](../screenshots/android-01-home.png)
-![Android: the empty chat with opening lines](../screenshots/android-02-empty-chat.png)
-![Android: Musa, Grace and Pastor Ben, all running on the phone](../screenshots/android-03-chat.png)
+![Android: pick a group](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/android-01-home.png)
+*Android: pick a group*
+![Android: the empty chat with opening lines](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/android-02-empty-chat.png)
+*Android: the empty chat with opening lines*
+![Android: Musa, Grace and Pastor Ben, all running on the phone](https://raw.githubusercontent.com/AziwaSensei/Banter-iOS/main/docs/screenshots/android-03-chat.png)
+*Android: Musa, Grace and Pastor Ben, all running on the phone*
 
 Why the difference? Because the two platforms hand you different things, and I let each app become what its platform made easy. We will come to that.
 
 ---
 
-### What offline buys you, and what it costs
+## What offline buys you, and what it costs
 
 **The advantages are real.** The first token arrives before your thumb leaves the screen. Nothing in the question leaves the device, so privacy is structural rather than promised. A chatty user costs you nothing more than a quiet one. And it works on the bus, in the basement, and in the village where the signal is one bar on a good day.
 
@@ -53,16 +60,21 @@ Why the difference? Because the two platforms hand you different things, and I l
 
 ---
 
-### What the two platforms give you
+## What the two platforms give you
 
-| | iOS: Foundation Models | Android: the field |
-|---|---|---|
-| **Model** | Apple's, shipped with the OS, about 3B parameters | Gemini Nano via AICore, or your own (Gemma through LiteRT-LM) |
-| **API** | `LanguageModelSession` | ML Kit GenAI Prompt API (beta) for Gemini Nano; LiteRT-LM for your own model |
-| **Agent framework** | Built in: tools, structured output, a readable transcript | Not built in. Koog gives you agents; you wire it to the device yourself |
-| **Tool calling** | First class: a `Tool` struct with `@Generable` arguments, the framework runs the loop | Engine-dependent; the Prompt API does not expose it the same way |
-| **Context window** | Fixed: 4,096 tokens on iOS 26, 8,192 reported on iOS 27 | Prompt API about 4,000 input tokens; your own model, bounded by memory |
-| **Who can run it** | Apple Intelligence devices, iOS 26 and later | Gemini Nano: a device list; your own model: anything with the RAM |
+Side by side:
+
+**Model.** On iOS: Apple's, shipped with the OS, about 3B parameters. On Android: Gemini Nano via AICore, or your own (Gemma through LiteRT-LM).
+
+**API.** On iOS: `LanguageModelSession`. On Android: ML Kit GenAI Prompt API (beta) for Gemini Nano; LiteRT-LM for your own model.
+
+**Agent framework.** On iOS: Built in: tools, structured output, a readable transcript. On Android: Not built in. Koog gives you agents; you wire it to the device yourself.
+
+**Tool calling.** On iOS: First class: a `Tool` struct with `@Generable` arguments, the framework runs the loop. On Android: Engine-dependent; the Prompt API does not expose it the same way.
+
+**Context window.** On iOS: Fixed: 4,096 tokens on iOS 26, 8,192 reported on iOS 27. On Android: Prompt API about 4,000 input tokens; your own model, bounded by memory.
+
+**Who can run it.** On iOS: Apple Intelligence devices, iOS 26 and later. On Android: Gemini Nano: a device list; your own model: anything with the RAM.
 
 **On iOS**, Apple gave me an agent in a box. The session holds the transcript; I give it instructions and tools; when the model needs the standings, the framework calls my tool and feeds the result back.
 
@@ -113,7 +125,7 @@ Each character is then an ordinary `AIAgent` with its own system prompt and a si
 
 ---
 
-### The error that kept finding me
+## The error that kept finding me
 
 `exceededContextWindowSize`. Apple's engineers said on the forums that the window is 4,096 tokens and fixed. On the iOS 27 simulator the error itself told me the ceiling was 8,192, so it has grown, but it is still a wall. Everything in a session counts: instructions, every prompt, every reply, every tool schema, and the input and output of every tool call.
 
@@ -164,7 +176,7 @@ On Android the problem is the same with a different number. The Banter character
 
 ---
 
-### Agents as a Service
+## Agents as a Service
 
 Around the fourth weekend I stopped thinking of the agent as "the AI part" and started treating it as a service, like a payments service or a sync service. I call this **Agents as a Service**, AGAS, and it changed how I lay out an app.
 
@@ -208,7 +220,7 @@ If you take one thing from this section: the agent is a service, tools are its o
 
 ---
 
-### Take the code
+## Take the code
 
 Both repositories are building blocks rather than finished products.
 
@@ -220,7 +232,7 @@ Clone them, break them, tell me what you find.
 
 ---
 
-### Where I have arrived
+## Where I have arrived
 
 Paul still knows more than my phone does, and he always will. But the phone now answers quickly, in the places he is not, and sends my questions nowhere.
 
@@ -234,10 +246,10 @@ If you build one of these, start offline. It teaches you things the cloud lets y
 
 **Sources**
 
-- Apple Developer Forums on the fixed 4,096-token limit: https://developer.apple.com/forums/thread/806542
-- Apple Technote TN3193, Managing the on-device foundation model's context window: https://developer.apple.com/documentation/technotes/tn3193-managing-the-on-device-foundation-model-s-context-window
-- Google, ML Kit GenAI Prompt API: https://developers.google.com/ml-kit/genai/prompt/android/get-started
-- Google, LiteRT-LM: https://developers.googleblog.com/blazing-fast-on-device-genai-with-litert-lm/
-- JetBrains Koog: https://github.com/JetBrains/koog and issue 262 on Android local models: https://github.com/JetBrains/koog/issues/262
-- Koog Edge: https://github.com/lemcoder/koog-edge
-- Gemma 4 E2B for LiteRT-LM: https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm
+- [Apple Developer Forums on the fixed 4,096-token limit](https://developer.apple.com/forums/thread/806542)
+- [Apple Technote TN3193, Managing the on-device foundation model's context window](https://developer.apple.com/documentation/technotes/tn3193-managing-the-on-device-foundation-model-s-context-window)
+- [Google, ML Kit GenAI Prompt API](https://developers.google.com/ml-kit/genai/prompt/android/get-started)
+- [Google, LiteRT-LM](https://developers.googleblog.com/blazing-fast-on-device-genai-with-litert-lm/)
+- [JetBrains Koog](https://github.com/JetBrains/koog) and [issue 262 on Android local models](https://github.com/JetBrains/koog/issues/262)
+- [Koog Edge](https://github.com/lemcoder/koog-edge)
+- [Gemma 4 E2B for LiteRT-LM](https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm)
